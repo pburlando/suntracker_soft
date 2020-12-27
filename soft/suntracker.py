@@ -7,6 +7,7 @@ import threading
 
 class Gui(object):
     def __init__(self):
+        """Construit l'interface graphique et le thread de lecture du port série"""
         # Thread de lecture du port série
         self.serial = serial.Serial()
         self.serial.timeout = 0.5
