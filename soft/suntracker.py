@@ -3,6 +3,26 @@
 
 import serial
 import threading
+from logzero import logger, logfile
+from datetime import datetime
+import os
+
+
+class LogData():
+    def __init__(self):
+        dir_path = os.path.dirname(os.path.realpath(__file__))
+        now = datetime.now()
+        logfile(dir_path + "/" + now.strftime("%H-%M-%S_%d-%m-%y") + ".log")
+
+    def LogLine(self, line):
+        try:
+            logger.info(line)
+        except Exception as e:
+            logger.error('{}: {})'.format(e.__class__.__name__, e))
+            return e
+        else:
+            return 0
+
 
 
 class Gui(object):
@@ -144,7 +164,8 @@ class Gui(object):
         # Lancer la scrutation des ports disponibles
         self.refresh_ports()
 
-
+        # Initialiser la journalisation
+        self.log_data = LogData()
 
         self.root.mainloop()
 
@@ -186,6 +207,7 @@ class Gui(object):
         else:
             self.text_monitor.delete('1.0', 'end')
             self.texte_label_etat.set(f"{self.selected_port}, 9600 bauds, en réception")
+            # Démarrer la journalisation
             self.StartThread()
         return 0
 
@@ -198,6 +220,13 @@ class Gui(object):
             self.texte_label_etat.set("")
         else:
             self.texte_label_etat.set(f"{self.selected_port}, fermé")
+            self.texte_label_lumg.set(f"Luminosité capteur gauche = --- %")
+            self.texte_label_lumd.set(f"Luminosité capteur droit = --- %")
+            self.texte_label_ecart_lum.set(f"Ecart gauche - droit  = --- %")
+            self.texte_label_u_ppv.set(f"Uppv = --- V")
+            self.texte_label_i_ppv.set(f"Ippv = --- mA")
+            self.texte_label_p_ppv.set(f"Pppv = --- mW")
+            self.texte_label_r_charge.set(f"Rcharge = --- \N{GREEK CAPITAL LETTER OMEGA}")
         return 0
 
     def StartThread(self):
@@ -206,8 +235,8 @@ class Gui(object):
         self.thread.setDaemon(1)
         self.alive.set()
         self.thread.start()
-        #self.serial.rts = True
-        #self.serial.dtr = True
+        self.serial.rts = True
+        self.serial.dtr = True
 
     def StopThread(self):
         """Stop the receiver thread, wait until it's finished."""
@@ -232,7 +261,8 @@ class Gui(object):
 
             if line:
                 self.message = line.decode().strip('\r\n') + '\n'
-                self.data_compute(line)
+                self.data_compute(self.message)
+                self.log_data.LogLine(self.message)
                 self.root.event_generate("<<EVT_SERIALRX>>")
 
     def OnSerialRead(self, event):
@@ -249,7 +279,7 @@ class Gui(object):
         print("help")
 
     def data_compute(self, line):
-        data = line.decode().strip().split(',')
+        data = line.split(',')
         if len(data) == 7:
             data_computed = [float(val.strip()) for val in data[0:4]]
             self.lumg = data_computed[0] * 100 / 1024
@@ -264,11 +294,13 @@ class Gui(object):
             self.texte_label_i_ppv.set(f"Ippv = {self.i_ppv:.2f} mA")
             self.p_ppv = self.u_ppv * self.i_ppv
             self.texte_label_p_ppv.set(f"Pppv = {self.p_ppv:.2f} mW")
-            if self.i_ppv != 0:
+            if self.i_ppv != 0 and self.u_ppv != 0:
                 self.Rcharge = self.u_ppv / self.i_ppv
+                self.texte_label_r_charge.set(f"Rcharge = {self.Rcharge:.2f} \N{GREEK CAPITAL LETTER OMEGA}")
             else:
-                self.Rcharge = "infinie"
-            self.texte_label_r_charge.set(f"Rcharge = {self.Rcharge:.2f} Ohm")
+                self.Rcharge = "---"
+                self.texte_label_r_charge.set(f"Rcharge = {self.Rcharge} \u03A9")
+
 
 
 if __name__ == "__main__":
