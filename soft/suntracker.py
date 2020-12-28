@@ -8,6 +8,15 @@ import threading
 class Gui(object):
     def __init__(self):
         """Construit l'interface graphique et le thread de lecture du port série"""
+        # Attributs
+        self.lumg = 0
+        self.lumd = 0
+        self.ecart_lum = 0
+        self.u_ppv = 0
+        self.i_ppv = 0
+        self.p_ppv = 0
+        self.Rcharge = 0
+
         # Thread de lecture du port série
         self.serial = serial.Serial()
         self.serial.timeout = 0.5
@@ -96,7 +105,36 @@ class Gui(object):
         self.texte_label_etat.set("Aucun port sélectionné")
         label_etat = ttk.Label(stateframe, textvariable=self.texte_label_etat)
         label_etat.grid(column=0, row=0, sticky="NWES")
+        
+        # Labels production
+        self.texte_label_u_ppv = StringVar()
+        label_u_ppv = ttk.Label(labelFrameProd, textvariable=self.texte_label_u_ppv)
+        label_u_ppv.grid(column=0, row=0, padx=5, pady=5, sticky='W')
 
+        self.texte_label_i_ppv = StringVar()
+        label_i_ppv = ttk.Label(labelFrameProd, textvariable=self.texte_label_i_ppv)
+        label_i_ppv.grid(column=0, row=1, padx=5, pady=5, sticky='W')
+
+        self.texte_label_p_ppv = StringVar()
+        label_p_ppv = ttk.Label(labelFrameProd, textvariable=self.texte_label_p_ppv)
+        label_p_ppv.grid(column=0, row=2, padx=5, pady=5, sticky='W')
+
+        self.texte_label_r_charge = StringVar()
+        label_r_ch = ttk.Label(labelFrameProd, textvariable=self.texte_label_r_charge)
+        label_r_ch.grid(column=0, row=3, padx=5, pady=5, sticky='W')
+
+        # labels positionnement
+        self.texte_label_lumg = StringVar()
+        label_lumg = ttk.Label(labelFramePosition, textvariable=self.texte_label_lumg)
+        label_lumg.grid(column=0, row=0, padx=5, pady=5, sticky='W')
+
+        self.texte_label_lumd = StringVar()
+        label_lumd = ttk.Label(labelFramePosition, textvariable=self.texte_label_lumd)
+        label_lumd.grid(column=0, row=1, padx=5, pady=5, sticky='W')
+
+        self.texte_label_ecart_lum = StringVar()
+        label_ecart_lum = ttk.Label(labelFramePosition, textvariable=self.texte_label_ecart_lum)
+        label_ecart_lum.grid(column=0, row=2, padx=5, pady=5, sticky='W')
 
         # Relier les événements à leur callback
         self.lbox_ports.bind("<<ListboxSelect>>", self.select_port)
@@ -194,6 +232,7 @@ class Gui(object):
 
             if line:
                 self.message = line.decode().strip('\r\n') + '\n'
+                self.data_compute(line)
                 self.root.event_generate("<<EVT_SERIALRX>>")
 
     def OnSerialRead(self, event):
@@ -208,6 +247,28 @@ class Gui(object):
 
     def help(self):
         print("help")
+
+    def data_compute(self, line):
+        data = line.decode().strip().split(',')
+        if len(data) == 7:
+            data_computed = [float(val.strip()) for val in data[0:4]]
+            self.lumg = data_computed[0] * 100 / 1024
+            self.texte_label_lumg.set(f"Luminosité capteur gauche = {self.lumg:.1f} %")
+            self.lumd = data_computed[1] * 100 / 1024
+            self.texte_label_lumd.set(f"Luminosité capteur droit = {self.lumd:.1f} %")
+            self.ecart_lum = self.lumg - self.lumd
+            self.texte_label_ecart_lum.set(f"Ecart gauche - droit  = {self.ecart_lum:.1f} %")
+            self.u_ppv = data_computed[2] * 5 * 9.81 / 1024 / 2
+            self.texte_label_u_ppv.set(f"Uppv = {self.u_ppv:.2f} V")
+            self.i_ppv = -0.5725 * data_computed[3] + 367
+            self.texte_label_i_ppv.set(f"Ippv = {self.i_ppv:.2f} mA")
+            self.p_ppv = self.u_ppv * self.i_ppv
+            self.texte_label_p_ppv.set(f"Pppv = {self.p_ppv:.2f} mW")
+            if self.i_ppv != 0:
+                self.Rcharge = self.u_ppv / self.i_ppv
+            else:
+                self.Rcharge = "infinie"
+            self.texte_label_r_charge.set(f"Rcharge = {self.Rcharge:.2f} Ohm")
 
 
 if __name__ == "__main__":
