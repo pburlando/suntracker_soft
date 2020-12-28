@@ -15,64 +15,98 @@ class Gui(object):
         self.thread = None
         self.alive = threading.Event()
         self.message = ""
+
         # GUI
         self.root = Tk()
         self.root.title("Suntracker monitor")
 
-        buttonsframe = ttk.Frame(self.root, padding="3 3 3 3" )
-        buttonsframe.grid(column=0, row=0, sticky="EW")
+        buttonsframe = ttk.Frame(self.root, padding="1 1 1 1" )
+        buttonsframe.grid(column=0, row=0, sticky="NWES")
 
-        mainframe = ttk.Frame(self.root, padding="3 3 12 12")
-        mainframe.grid(column=0, row=1, sticky=(N, W, E, S))
+        mainframe = ttk.Frame(self.root, padding="1 1 1 1")
+        mainframe.grid(column=0, row=1, sticky="NWES")
 
-        stateframe = ttk.Frame(self.root, padding="3 3 3 3")
-        stateframe.grid(column=0, row=2, sticky="EW")
+        stateframe = ttk.Frame(self.root, padding="1 1 1 1")
+        stateframe.grid(column=0, row=2, sticky="NWES")
+
+        labelFrameManu = ttk.Labelframe(mainframe, text="Manuel")
+        labelFrameManu.grid(row=0, column=1, sticky="NWES")
+
+        labelFrameProd = ttk.Labelframe(mainframe, text="Production")
+        labelFrameProd.grid(row=1, column=1, sticky="NWES")
+
+        labelFramePosition = ttk.Labelframe(mainframe, text="Positionnement")
+        labelFramePosition.grid(row=2, column=1, sticky="NWES")
+
+        labelFrameConnexion = ttk.Labelframe(mainframe, text="Sélectionner une connexion")
+        labelFrameConnexion.grid(row=0, column=0, sticky="NWES")
+
+        labelFrameData = ttk.Labelframe(mainframe, text="Données reçues")
+        labelFrameData.grid(row=1, column=0, rowspan=2, sticky="NWES")
 
         self.root.columnconfigure(0, weight=1)
-        self.root.rowconfigure(0, weight=1)
-        self.root.rowconfigure(1, weight=10)
+        self.root.rowconfigure(0, weight=20)
+        self.root.rowconfigure(1, weight=500)
         self.root.rowconfigure(2, weight=1)
 
         mainframe.rowconfigure(0, weight=1)
-        mainframe.rowconfigure(1, weight=4)
-        mainframe.columnconfigure(0, weight=3)
-        mainframe.columnconfigure(1, weight=3)
-        mainframe.columnconfigure(2, weight=3)
+        mainframe.rowconfigure(1, weight=3)
+        mainframe.rowconfigure(2, weight=1)
+        mainframe.columnconfigure(0, weight=1)
+        mainframe.columnconfigure(1, weight=1)
+        
+        stateframe.rowconfigure(0, weight=1)
+        stateframe.rowconfigure(0, weight=1)
+        
+        buttonsframe.rowconfigure(0, weight=1)
+        
+        labelFrameConnexion.rowconfigure(0, weight=1)
+        labelFrameConnexion.columnconfigure(0, weight=1)
+        
+        labelFrameData.rowconfigure(0, weight=1000)
+        labelFrameData.rowconfigure(1, weight=1)
+        labelFrameData.columnconfigure(0, weight=1000)
+        labelFrameData.columnconfigure(1, weight=1)
 
-        ttk.Button(buttonsframe, text="Open", command=self.open_port).grid(column=0, row=0, sticky=E)
-        ttk.Button(buttonsframe, text="Close", command=self.close_port).grid(column=1, row=0, sticky=E)
-        ''':todo rafraichir la liste des ports disponibles régulièrements, 
-        message pour demander la sélection d'un port'''
+        # Boutons menu
+        ttk.Button(buttonsframe, text="Ouvrir", command=self.open_port).grid(column=0, row=0, sticky="WNS")
+        ttk.Button(buttonsframe, text="Fermer", command=self.close_port).grid(column=1, row=0, sticky="WNS")
+        ttk.Button(buttonsframe, text="Journal", command=self.log).grid(column=2, row=0, sticky="WNS")
+        ttk.Button(buttonsframe, text="Aide", command=self.help).grid(column=3, row=0, sticky="WNS")
+        # Liste de choix des ports séries
         self.liste_ports = self.liste_ports_serie_disponibles()
         self.selected_port = ""
-        ## Liste de choix des ports séries
         self.choices_ports_var = StringVar()
-        self.lbox_ports = Listbox(mainframe, height=4, width=30, listvariable=self.choices_ports_var, selectmode="single")
+        self.lbox_ports = Listbox(labelFrameConnexion, height=4, width=30, listvariable=self.choices_ports_var, selectmode="single")
         self.lbox_ports.grid(column=0, row=0, sticky='nsew')
-        self.lbox_ports.bind("<<ListboxSelect>>", self.select_port)
+
         # Zone de texte des données reçues
-        self.text_monitor = Text(mainframe, width=80, height=24)
-        xs = ttk.Scrollbar(mainframe, orient='horizontal', command=self.text_monitor.xview)
-        ys = ttk.Scrollbar(mainframe, orient='vertical', command=self.text_monitor.yview)
+        self.text_monitor = Text(labelFrameData, width=80, height=24)
+        xs = ttk.Scrollbar(labelFrameData, orient='horizontal', command=self.text_monitor.xview)
+        ys = ttk.Scrollbar(labelFrameData, orient='vertical', command=self.text_monitor.yview)
         self.text_monitor['xscrollcommand'] = xs.set
         self.text_monitor['yscrollcommand'] = ys.set
-        self.text_monitor.grid(column=0, columnspan=3, row=1, sticky='nwes')
-        ys.grid(column=4, row=1, sticky='ns')
-        xs.grid(column=0, columnspan=3, sticky='ew')
+        self.text_monitor.grid(column=0, row=0, sticky='nwes', ipady=5)
+        ys.grid(column=1, row=0, sticky='ns')
+        xs.grid(column=0, row=1, columnspan=2, sticky='ew')
         self.text_monitor.insert("1.0", "Les données reçues s'afficheront ici.\n")
 
         # Labels barre d'état
         self.texte_label_etat = StringVar()
         self.texte_label_etat.set("Aucun port sélectionné")
         label_etat = ttk.Label(stateframe, textvariable=self.texte_label_etat)
-        label_etat.grid(column=0, row=0)
+        label_etat.grid(column=0, row=0, sticky="NWES")
 
+
+        # Relier les événements à leur callback
+        self.lbox_ports.bind("<<ListboxSelect>>", self.select_port)
         self.root.bind("<<EVT_SERIALRX>>", self.OnSerialRead)
         self.root.bind("<Destroy>", self.OnDestroy)
+
+        # Lancer la scrutation des ports disponibles
         self.refresh_ports()
 
-        # for child in mainframe.winfo_children():
-        #     child.grid_configure(padx=5, pady=5)
+
 
         self.root.mainloop()
 
@@ -100,7 +134,7 @@ class Gui(object):
 
     def open_port(self, *args):
         if self.selected_port == "":
-            messagebox.showinfo(message="Sélectionner un port dans la liste déroulante")
+            messagebox.showinfo(message="Sélectionner un port dans la liste connexions")
             return -1
         if self.serial.isOpen():
             messagebox.showinfo(message="Le port est déjà ouvert")
@@ -168,6 +202,12 @@ class Gui(object):
 
     def OnDestroy(self, event):
         self.close_port()
+
+    def log(self):
+        print("log")
+
+    def help(self):
+        print("help")
 
 
 if __name__ == "__main__":
