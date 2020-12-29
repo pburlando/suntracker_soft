@@ -129,6 +129,12 @@ class Gui(object):
         self.choices_ports_var = StringVar()
         self.lbox_ports = Listbox(labelFrameConnexion, height=4, width=30, listvariable=self.choices_ports_var, selectmode="single")
         self.lbox_ports.grid(column=0, row=0, sticky='nsew')
+        
+        # Combobox liste des ports
+        style = ttk.Style()
+        style.configure("TCombobox", fieldbackground="red")
+        self.combobox_ports = ttk.Combobox(labelFrameManu, state='readonly', style="TCombobox")
+        self.combobox_ports.grid(column=0, row=0, sticky="NWES")
 
         # Zone de texte des données reçues
         self.text_monitor = Text(labelFrameData, width=80, height=24)
@@ -204,15 +210,13 @@ class Gui(object):
         """
         ports = serial.tools.list_ports.comports()
         return [port for port, desc, hwid in sorted(ports)]
-        # if os.name == 'posix':
-        #     from subprocess import run
-        #     devices = run(["ls", "/dev/serial/by-id"], capture_output=True)
-        #     return devices.stdout.decode().split('\n')
 
     def refresh_ports(self):
         """Refresh availables ports in lbox_ports every 5s"""
         self.liste_ports = self.liste_ports_serie_disponibles()
         self.choices_ports_var.set(self.liste_ports)
+        self.combobox_ports['values'] = self.liste_ports
+        self.combobox_ports.current(0)
         self.root.after(5000, self.refresh_ports)
 
     def select_port(self, *args):
