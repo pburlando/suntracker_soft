@@ -2,13 +2,14 @@
 # -*- coding: utf8 -*-
 
 import serial
+import serial.tools.list_ports
 import threading
 from logzero import logger, logfile
 from datetime import datetime
 import os
 
 
-class LogData():
+class LogData:
     def __init__(self):
         dir_path = os.path.dirname(os.path.realpath(__file__))
         now = datetime.now()
@@ -23,6 +24,26 @@ class LogData():
         else:
             return 0
 
+
+class Csv_data:
+    def __init__(self):
+        dir_path = os.path.dirname(os.path.realpath(__file__))
+        now = datetime.now()
+        self.file = f"{dir_path}{os.path.sep}datafile_{now}.csv"
+        self.create_csv_file()
+
+    def create_csv_file(self):
+        "Create a new CSV file and add the header row"
+        with open(self.file, 'w') as f:
+            header = "Date/time, lumg_raw, lumd_raw, U_ppv_raw, I_ppv_raw, Ecart G-D, U_ppv_V, I_ppv_mA\n"
+            f.write(header)
+
+    def add_csv_data(self, data):
+        """Add a row of data to the data_file CSV"""
+        if len(data.split(',')) == 7:
+            with open(self.file, 'a') as f:
+                now = datetime.now()
+                f.write(f"{now}, {data}")
 
 
 class Gui(object):
@@ -167,6 +188,12 @@ class Gui(object):
         # Initialiser la journalisation
         self.log_data = LogData()
 
+        # Initialiser l'enregistrement csv
+        self.csv_data = Csv_data()
+
+        # Autorisation données valides
+        self.data_is_valid = False
+
         self.root.mainloop()
 
     def liste_ports_serie_disponibles(self):
@@ -175,9 +202,12 @@ class Gui(object):
         liste les ports séries disponibles par identificateur
         et renvoie une liste
         """
-        from subprocess import run
-        devices = run(["ls", "/dev/serial/by-id"], capture_output=True)
-        return devices.stdout.decode().split('\n')
+        ports = serial.tools.list_ports.comports()
+        return [port for port, desc, hwid in sorted(ports)]
+        # if os.name == 'posix':
+        #     from subprocess import run
+        #     devices = run(["ls", "/dev/serial/by-id"], capture_output=True)
+        #     return devices.stdout.decode().split('\n')
 
     def refresh_ports(self):
         """Refresh availables ports in lbox_ports every 5s"""
@@ -199,14 +229,14 @@ class Gui(object):
             messagebox.showinfo(message="Le port est déjà ouvert")
             return -1
         # Lancer l'écoute du port série
-        self.serial.port = f"/dev/serial/by-id/{self.selected_port}"
+        self.serial.port = self.selected_port
         try:
             self.serial.open()
         except serial.SerialException as e:
             messagebox.showerror(message=f"Erreur: {e}")
         else:
             self.text_monitor.delete('1.0', 'end')
-            self.texte_label_etat.set(f"{self.selected_port}, 9600 bauds, en réception")
+            self.texte_label_etat.set(f"{self.selected_port}, {self.serial.port}, 9600 bauds, en réception")
             # Démarrer la journalisation
             self.StartThread()
         return 0
@@ -227,6 +257,8 @@ class Gui(object):
             self.texte_label_i_ppv.set(f"Ippv = --- mA")
             self.texte_label_p_ppv.set(f"Pppv = --- mW")
             self.texte_label_r_charge.set(f"Rcharge = --- \N{GREEK CAPITAL LETTER OMEGA}")
+        finally:
+            self.data_is_valid = False
         return 0
 
     def StartThread(self):
@@ -261,9 +293,13 @@ class Gui(object):
 
             if line:
                 self.message = line.decode().strip('\r\n') + '\n'
-                self.data_compute(self.message)
-                self.log_data.LogLine(self.message)
-                self.root.event_generate("<<EVT_SERIALRX>>")
+                if "Démarrage" in self.message:
+                    self.data_is_valid = True
+                if self.data_is_valid:
+                    self.data_compute(self.message)
+                    self.log_data.LogLine(self.message)
+                    self.csv_data.add_csv_data(self.message)
+                    self.root.event_generate("<<EVT_SERIALRX>>")
 
     def OnSerialRead(self, event):
         self.text_monitor.insert('end', self.message)
