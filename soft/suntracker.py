@@ -11,9 +11,9 @@ import os
 
 class LogData:
     def __init__(self):
-        dir_path = os.path.dirname(os.path.realpath(__file__))
+        dir_path = os.getcwd()
         now = datetime.now()
-        logfile(dir_path + "/" + now.strftime("%H-%M-%S_%d-%m-%y") + ".log")
+        logfile(dir_path + now.strftime("%d-%m-%y_%H-%M-%S") + ".log")
 
     def LogLine(self, line):
         try:
@@ -27,9 +27,10 @@ class LogData:
 
 class Csv_data:
     def __init__(self):
-        dir_path = os.path.dirname(os.path.realpath(__file__))
+        dir_path = os.getcwd()
         now = datetime.now()
-        self.file = f"{dir_path}{os.path.sep}datafile_{now}.csv"
+        cur_time = now.strftime("%d-%m-%y_%H-%M-%S")
+        self.file = f"{dir_path}{os.path.sep}datafile_{cur_time}.csv"
         self.create_csv_file()
 
     def create_csv_file(self):
@@ -70,7 +71,7 @@ class Gui(object):
         self.root = Tk()
         self.root.title("Suntracker monitor")
 
-        buttonsframe = ttk.Frame(self.root, padding="1 1 1 1" )
+        buttonsframe = ttk.Frame(self.root, padding="1 1 1 1")
         buttonsframe.grid(column=0, row=0, sticky="NWES")
 
         mainframe = ttk.Frame(self.root, padding="1 1 1 1")
@@ -104,15 +105,15 @@ class Gui(object):
         mainframe.rowconfigure(2, weight=1)
         mainframe.columnconfigure(0, weight=1)
         mainframe.columnconfigure(1, weight=1)
-        
+
         stateframe.rowconfigure(0, weight=1)
         stateframe.rowconfigure(0, weight=1)
-        
+
         buttonsframe.rowconfigure(0, weight=1)
-        
+
         labelFrameConnexion.rowconfigure(0, weight=1)
         labelFrameConnexion.columnconfigure(0, weight=1)
-        
+
         labelFrameData.rowconfigure(0, weight=1000)
         labelFrameData.rowconfigure(1, weight=1)
         labelFrameData.columnconfigure(0, weight=1000)
@@ -127,9 +128,10 @@ class Gui(object):
         self.liste_ports = self.liste_ports_serie_disponibles()
         self.selected_port = ""
         self.choices_ports_var = StringVar()
-        self.lbox_ports = Listbox(labelFrameConnexion, height=4, width=30, listvariable=self.choices_ports_var, selectmode="single")
+        self.lbox_ports = Listbox(labelFrameConnexion, height=4, width=30, listvariable=self.choices_ports_var,
+                                  selectmode="single")
         self.lbox_ports.grid(column=0, row=0, sticky='nsew')
-        
+
         # Combobox liste des ports
         style = ttk.Style()
         style.configure("TCombobox", fieldbackground="red")
@@ -152,7 +154,7 @@ class Gui(object):
         self.texte_label_etat.set("Aucun port sélectionné")
         label_etat = ttk.Label(stateframe, textvariable=self.texte_label_etat)
         label_etat.grid(column=0, row=0, sticky="NWES")
-        
+
         # Labels production
         self.texte_label_u_ppv = StringVar()
         label_u_ppv = ttk.Label(labelFrameProd, textvariable=self.texte_label_u_ppv)
@@ -185,8 +187,10 @@ class Gui(object):
 
         # Relier les événements à leur callback
         self.lbox_ports.bind("<<ListboxSelect>>", self.select_port)
-        self.root.bind("<<EVT_SERIALRX>>", self.OnSerialRead)
+        # self.root.bind("<<EVT_SERIALRX>>", self.OnSerialRead)
+        self.root.bind("<<EVT_SERIALRX>>", lambda event: self.OnSerialRead(self.message))
         self.root.bind("<Destroy>", self.OnDestroy)
+        self.root.focus_set()
 
         # Lancer la scrutation des ports disponibles
         self.refresh_ports()
@@ -240,7 +244,7 @@ class Gui(object):
             messagebox.showerror(message=f"Erreur: {e}")
         else:
             self.text_monitor.delete('1.0', 'end')
-            self.texte_label_etat.set(f"{self.selected_port}, {self.serial.port}, 9600 bauds, en réception")
+            self.texte_label_etat.set(f"{self.selected_port}, 9600 bauds, en réception")
             # Démarrer la journalisation
             self.StartThread()
         return 0
@@ -300,14 +304,14 @@ class Gui(object):
                 if "Démarrage" in self.message:
                     self.data_is_valid = True
                 if self.data_is_valid:
-                    self.data_compute(self.message)
-                    self.log_data.LogLine(self.message)
-                    self.csv_data.add_csv_data(self.message)
                     self.root.event_generate("<<EVT_SERIALRX>>")
 
-    def OnSerialRead(self, event):
-        self.text_monitor.insert('end', self.message)
+    def OnSerialRead(self, data):
+        self.text_monitor.insert('end', data)
         self.text_monitor.see('end')
+        self.data_compute(data)
+        self.log_data.LogLine(data)
+        self.csv_data.add_csv_data(data)
 
     def OnDestroy(self, event):
         self.close_port()
@@ -340,7 +344,6 @@ class Gui(object):
             else:
                 self.Rcharge = "---"
                 self.texte_label_r_charge.set(f"Rcharge = {self.Rcharge} \u03A9")
-
 
 
 if __name__ == "__main__":
