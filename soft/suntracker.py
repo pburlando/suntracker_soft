@@ -13,7 +13,7 @@ class LogData:
     def __init__(self):
         dir_path = os.getcwd()
         now = datetime.now()
-        logfile(dir_path + now.strftime("%d-%m-%y_%H-%M-%S") + ".log")
+        logfile(dir_path + os.path.sep + now.strftime("%d-%m-%y_%H-%M-%S") + ".log")
 
     def LogLine(self, line):
         try:
