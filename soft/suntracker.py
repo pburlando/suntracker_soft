@@ -1,5 +1,10 @@
 #!/usr/bin/env python3
 # -*- coding: utf8 -*-
+''':todo
+Faire une classe data compute
+Enregistrer les données traitées dans le fichier csv et les données brutes reçues dans le journal
+Virer le combobox
+Programmer le mode manuel'''
 
 import serial
 import serial.tools.list_ports
@@ -58,6 +63,7 @@ class Gui(object):
         self.i_ppv = 0
         self.p_ppv = 0
         self.Rcharge = 0
+        self.energie = 0
 
         # Thread de lecture du port série
         self.serial = serial.Serial()
@@ -133,10 +139,8 @@ class Gui(object):
         self.lbox_ports.grid(column=0, row=0, sticky='nsew')
 
         # Combobox liste des ports
-        style = ttk.Style()
-        style.configure("TCombobox", fieldbackground="red")
-        self.combobox_ports = ttk.Combobox(labelFrameManu, state='readonly', style="TCombobox")
-        self.combobox_ports.grid(column=0, row=0, sticky="NWES")
+        self.combobox_ports = ttk.Combobox(buttonsframe, state='readonly')
+        self.combobox_ports.grid(column=4, row=0, sticky="NWES")
 
         # Zone de texte des données reçues
         self.text_monitor = Text(labelFrameData, width=80, height=24)
@@ -171,6 +175,10 @@ class Gui(object):
         self.texte_label_r_charge = StringVar()
         label_r_ch = ttk.Label(labelFrameProd, textvariable=self.texte_label_r_charge)
         label_r_ch.grid(column=0, row=3, padx=5, pady=5, sticky='W')
+
+        self.texte_label_energie = StringVar()
+        label_energie = ttk.Label(labelFrameProd, textvariable=self.texte_label_energie)
+        label_energie.grid(column=0, row=4, padx=5, pady=5, sticky='W')
 
         # labels positionnement
         self.texte_label_lumg = StringVar()
@@ -219,7 +227,7 @@ class Gui(object):
         """Refresh availables ports in lbox_ports every 5s"""
         self.liste_ports = self.liste_ports_serie_disponibles()
         self.choices_ports_var.set(self.liste_ports)
-        self.combobox_ports['values'] = self.liste_ports
+        self.combobox_ports['values'] = ['Sélectionner un port'] + self.liste_ports
         self.combobox_ports.current(0)
         self.root.after(5000, self.refresh_ports)
 
@@ -265,6 +273,8 @@ class Gui(object):
             self.texte_label_i_ppv.set(f"Ippv = --- mA")
             self.texte_label_p_ppv.set(f"Pppv = --- mW")
             self.texte_label_r_charge.set(f"Rcharge = --- \N{GREEK CAPITAL LETTER OMEGA}")
+            self.texte_label_energie.set("Energie = --- J")
+            self.energie = 0
         finally:
             self.data_is_valid = False
         return 0
@@ -317,7 +327,9 @@ class Gui(object):
         self.close_port()
 
     def log(self):
-        print("log")
+        '''Proposer l'ouverture d'un fichier de log ou csv puis l'ouvrir avec l'éditeur de texte par défaut'''
+        filename = filedialog.askopenfilename()
+
 
     def help(self):
         print("help")
@@ -335,10 +347,15 @@ class Gui(object):
             self.u_ppv = data_computed[2] * 5 * 9.81 / 1024 / 2
             self.texte_label_u_ppv.set(f"Uppv = {self.u_ppv:.2f} V")
             self.i_ppv = -0.5725 * data_computed[3] + 367
+            if self.i_ppv < 0:
+                self.i_ppv = 0
             self.texte_label_i_ppv.set(f"Ippv = {self.i_ppv:.2f} mA")
             self.p_ppv = self.u_ppv * self.i_ppv
             self.texte_label_p_ppv.set(f"Pppv = {self.p_ppv:.2f} mW")
-            if self.i_ppv != 0 and self.u_ppv != 0:
+            self.energie += self.p_ppv / 1000   # Energie calculée en Joule
+            self.texte_label_energie.set(f"Energie = {self.energie:.2f} J")
+
+            if self.i_ppv >= 5 and self.u_ppv >= 2:
                 self.Rcharge = self.u_ppv / self.i_ppv
                 self.texte_label_r_charge.set(f"Rcharge = {self.Rcharge:.2f} \N{GREEK CAPITAL LETTER OMEGA}")
             else:
@@ -350,5 +367,6 @@ if __name__ == "__main__":
     from tkinter import *
     from tkinter import ttk
     from tkinter import messagebox
+    from tkinter import filedialog
 
     interface = Gui()
