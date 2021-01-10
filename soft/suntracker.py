@@ -1,10 +1,8 @@
 #!/usr/bin/env python3
 # -*- coding: utf8 -*-
 ''':todo
-Faire une classe data compute
-Enregistrer les données traitées dans le fichier csv et les données brutes reçues dans le journal
-Virer le combobox
-Programmer le mode manuel'''
+Envoyer les commandes manuelles sur le port série
+'''
 
 import serial
 import serial.tools.list_ports
@@ -41,15 +39,15 @@ class Csv_data:
     def create_csv_file(self):
         "Create a new CSV file and add the header row"
         with open(self.file, 'w') as f:
-            header = "Date/time, lumg_raw, lumd_raw, U_ppv_raw, I_ppv_raw, Ecart G-D, U_ppv_V, I_ppv_mA\n"
+            header = "Date/time, lumg %, lumd %, Ecart G-D %, U_ppv V, I_ppv mA,  P_ppv mW, E_ppv J\n"
             f.write(header)
 
     def add_csv_data(self, data):
         """Add a row of data to the data_file CSV"""
-        if len(data.split(',')) == 7:
-            with open(self.file, 'a') as f:
-                now = datetime.now()
-                f.write(f"{now}, {data}")
+        with open(self.file, 'a') as f:
+            now = datetime.now()
+            cur_time = now.strftime("%x %X.%f")
+            f.write(f"{cur_time}, {data}\n")
 
 
 class Gui(object):
@@ -76,6 +74,7 @@ class Gui(object):
         # GUI
         self.root = Tk()
         self.root.title("Suntracker monitor")
+        self.buttons_manu_state = 1
 
         buttonsframe = ttk.Frame(self.root, padding="1 1 1 1")
         buttonsframe.grid(column=0, row=0, sticky="NWES")
@@ -138,10 +137,6 @@ class Gui(object):
                                   selectmode="single")
         self.lbox_ports.grid(column=0, row=0, sticky='nsew')
 
-        # Combobox liste des ports
-        self.combobox_ports = ttk.Combobox(buttonsframe, state='readonly')
-        self.combobox_ports.grid(column=4, row=0, sticky="NWES")
-
         # Zone de texte des données reçues
         self.text_monitor = Text(labelFrameData, width=80, height=24)
         xs = ttk.Scrollbar(labelFrameData, orient='horizontal', command=self.text_monitor.xview)
@@ -193,6 +188,19 @@ class Gui(object):
         label_ecart_lum = ttk.Label(labelFramePosition, textvariable=self.texte_label_ecart_lum)
         label_ecart_lum.grid(column=0, row=2, padx=5, pady=5, sticky='W')
 
+        # Définition des boutons du mode manuel
+        names = ['Auto', 'Gauche', 'Droite']
+        self.buttons_manuel = []
+        self.text_buttons_manuel = []
+        for i in range(len(names)):
+            text_button = StringVar(value=names[i])
+            button = ttk.Button(labelFrameManu, command=lambda i=i: self.callback_buttons(i), textvariable=text_button)
+            if i != 0:
+                button.state(['disabled'])
+            button.grid(row=0, column=i)
+            self.buttons_manuel.append(button)
+            self.text_buttons_manuel.append(text_button)
+
         # Relier les événements à leur callback
         self.lbox_ports.bind("<<ListboxSelect>>", self.select_port)
         # self.root.bind("<<EVT_SERIALRX>>", self.OnSerialRead)
@@ -214,6 +222,23 @@ class Gui(object):
 
         self.root.mainloop()
 
+    def callback_buttons(self, i):
+        button_states = ['Auto', 'Manu']
+        if i == 0:
+            self.text_buttons_manuel[i].set(button_states[self.buttons_manu_state])
+            if self.buttons_manu_state == 1:
+                self.buttons_manuel[1].state(['!disabled'])
+                self.buttons_manuel[2].state(['!disabled'])
+            else:
+                self.buttons_manuel[1].state(['disabled'])
+                self.buttons_manuel[2].state(['disabled'])
+
+            self.buttons_manu_state = not self.buttons_manu_state
+        elif i == 1:
+            print("Commande panneau vers la gauche")
+        elif i == 2:
+            print("Commande panneau vers la droite")
+
     def liste_ports_serie_disponibles(self):
         """
         Debian buster
@@ -227,8 +252,6 @@ class Gui(object):
         """Refresh availables ports in lbox_ports every 5s"""
         self.liste_ports = self.liste_ports_serie_disponibles()
         self.choices_ports_var.set(self.liste_ports)
-        self.combobox_ports['values'] = ['Sélectionner un port'] + self.liste_ports
-        self.combobox_ports.current(0)
         self.root.after(5000, self.refresh_ports)
 
     def select_port(self, *args):
@@ -320,8 +343,8 @@ class Gui(object):
         self.text_monitor.insert('end', data)
         self.text_monitor.see('end')
         self.data_compute(data)
-        self.log_data.LogLine(data)
-        self.csv_data.add_csv_data(data)
+        self.log_data.LogLine(data)  # Log des données entrantes
+        # self.csv_data.add_csv_data(data)
 
     def OnDestroy(self, event):
         self.close_port()
@@ -330,37 +353,47 @@ class Gui(object):
         '''Proposer l'ouverture d'un fichier de log ou csv puis l'ouvrir avec l'éditeur de texte par défaut'''
         filename = filedialog.askopenfilename()
 
-
-    def help(self):
+    @staticmethod
+    def help():
         print("help")
 
     def data_compute(self, line):
         data = line.split(',')
         if len(data) == 7:
-            data_computed = [float(val.strip()) for val in data[0:4]]
-            self.lumg = data_computed[0] * 100 / 1024
-            self.texte_label_lumg.set(f"Luminosité capteur gauche = {self.lumg:.1f} %")
-            self.lumd = data_computed[1] * 100 / 1024
-            self.texte_label_lumd.set(f"Luminosité capteur droit = {self.lumd:.1f} %")
+            raw_data = [float(val.strip()) for val in data[0:4]]
+            self.lumg = raw_data[0] * 100 / 1024
+            self.lumd = raw_data[1] * 100 / 1024
             self.ecart_lum = self.lumg - self.lumd
-            self.texte_label_ecart_lum.set(f"Ecart gauche - droit  = {self.ecart_lum:.1f} %")
-            self.u_ppv = data_computed[2] * 5 * 9.81 / 1024 / 2
-            self.texte_label_u_ppv.set(f"Uppv = {self.u_ppv:.2f} V")
-            self.i_ppv = -0.5725 * data_computed[3] + 367
+
+            self.u_ppv = raw_data[2] * 5 * 9.81 / 1024 / 2
+
+            self.i_ppv = -0.5725 * raw_data[3] + 367
             if self.i_ppv < 0:
                 self.i_ppv = 0
-            self.texte_label_i_ppv.set(f"Ippv = {self.i_ppv:.2f} mA")
             self.p_ppv = self.u_ppv * self.i_ppv
-            self.texte_label_p_ppv.set(f"Pppv = {self.p_ppv:.2f} mW")
-            self.energie += self.p_ppv / 1000   # Energie calculée en Joule
-            self.texte_label_energie.set(f"Energie = {self.energie:.2f} J")
 
-            if self.i_ppv >= 5 and self.u_ppv >= 2:
-                self.Rcharge = self.u_ppv / self.i_ppv
-                self.texte_label_r_charge.set(f"Rcharge = {self.Rcharge:.2f} \N{GREEK CAPITAL LETTER OMEGA}")
-            else:
-                self.Rcharge = "---"
-                self.texte_label_r_charge.set(f"Rcharge = {self.Rcharge} \u03A9")
+            self.energie += self.p_ppv / 1000  # Energie calculée en Joule
+
+            csv_data = f"{self.lumg:.1f}, {self.lumd:.1f}, {self.ecart_lum:.1f}, {self.u_ppv:.2f}," \
+                       f"{self.i_ppv:.2f}, {self.p_ppv:.2f}, {self.energie:.2f}"
+            self.csv_data.add_csv_data(csv_data)
+            self.print_data()
+
+    def print_data(self):
+        ''' Affiche les données dans le labelFrame data'''
+        self.texte_label_lumg.set(f"Luminosité capteur gauche = {self.lumg:.1f} %")
+        self.texte_label_lumd.set(f"Luminosité capteur droit = {self.lumd:.1f} %")
+        self.texte_label_ecart_lum.set(f"Ecart gauche - droit  = {self.ecart_lum:.1f} %")
+        self.texte_label_u_ppv.set(f"Uppv = {self.u_ppv:.2f} V")
+        self.texte_label_i_ppv.set(f"Ippv = {self.i_ppv:.2f} mA")
+        self.texte_label_p_ppv.set(f"Pppv = {self.p_ppv:.2f} mW")
+        self.texte_label_energie.set(f"Energie = {self.energie:.2f} J")
+        if self.i_ppv >= 5 and self.u_ppv >= 2:
+            self.Rcharge = self.u_ppv / self.i_ppv
+            self.texte_label_r_charge.set(f"Rcharge = {self.Rcharge:.2f} \N{GREEK CAPITAL LETTER OMEGA}")
+        else:
+            self.Rcharge = "---"
+            self.texte_label_r_charge.set(f"Rcharge = {self.Rcharge} \u03A9")
 
 
 if __name__ == "__main__":
